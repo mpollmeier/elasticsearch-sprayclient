@@ -10,14 +10,15 @@ import scala.util._
 import akka.actor._
 import akka.io.IO
 import akka.pattern.ask
+import akka.routing.RoundRobinRouter
 import akka.util.Timeout
 import spray.can.Http
 import spray.client.pipelining._
 import spray.http._
 
-object SprayESClient extends App {
+object ElasticSearchTryout extends App {
   import MemberCreator._
-  val longTimeout = 30 minutes
+  val longTimeout = 300 minutes
   implicit val system = ActorSystem()
   implicit val timeout = Timeout(longTimeout)
   import system.dispatcher
@@ -51,17 +52,17 @@ object SprayESClient extends App {
       }"""))))
   }
 
-
-
   setupIndex()
   println("index setup complete")
 
-  val memberCount = 10 * 1000 * 1000
-  val memberCreator = system.actorOf(Props(classOf[MemberCreator], pipeline))
+  val memberCount = 1 * 1000 * 1000
+  val memberCreator = system.actorOf(Props(classOf[MemberCreator], pipeline)
+    .withRouter(RoundRobinRouter(nrOfInstances = 5)))
 
-  (0 until memberCount) foreach { id ⇒ 
-    Await.ready(memberCreator ? CreateMember(id), longTimeout)
+  val futures = (0 until memberCount) map { id ⇒ 
+    memberCreator ? CreateMember(id)
   }
+  Await.ready(Future.sequence(futures), longTimeout)
 
   println("setting up members complete")
   system.shutdown()
@@ -82,10 +83,10 @@ class MemberCreator(pipeline: Future[SendReceive]) extends Actor {
 
   def receive = {
     case CreateMember(id) ⇒ 
+      if(id % 1000 == 0) println(s"creating member $id ($self)")
       val respondTo = sender
-      createMember(id) onComplete {
-        case _ ⇒ respondTo ! MemberCreated
-      }
+      Await.ready(createMember(id), longTimeout)
+      respondTo ! MemberCreated
   }
 
   def createMember(id: Int): Future[HttpResponse] = {
