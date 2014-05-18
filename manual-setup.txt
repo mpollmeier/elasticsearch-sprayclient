@@ -1,0 +1,62 @@
+curl -X DELETE "http://localhost:9200/members"
+curl -XPUT http://localhost:9200/members
+curl -XPOST localhost:9200/members/member/_mapping -d '{
+  "member":{
+      "name" : {"type": "string", "index": "not_analyzed"},
+      "age" : {"type": "integer"},
+      "properties":{
+        "transactions": {
+          "type": "nested",
+          "properties": {
+            "genre": {"type": "string"},
+            "date": {"type": "date"}
+          }
+        }
+      }
+    }
+}'
+
+
+curl "http://localhost:9200/members/member/1" -d '{
+  "name": "member1",
+  "age": 25,
+  "transactions": [ {"genre": "action", "date": "2014-05-17"}, {"genre": "horror", "date": "2014-04-01"} ]
+}'
+curl "http://localhost:9200/members/member/2" -d '{
+  "name": "member2",
+  "age": 50,
+  "transactions": [ {"genre": "action", "date": "2014-01-01"} ]
+}'
+curl "http://localhost:9200/members/member/3" -d '{
+  "name": "member3",
+  "age": 29,
+  "transactions": [ {"genre": "fiction", "date": "2014-05-17"} ]
+}'
+
+curl http://localhost:9200/members/member/_search?pretty=true -d '{
+  "filter": {
+    "and": [
+      { 
+        "range": { 
+          "age": { "gt" : 20, "lt" : 30 } 
+        } 
+      },
+      { 
+        "nested": {
+          "path": "transactions",
+          "query": {
+            "term": { "transactions.genre": "action" }
+          }
+        }
+      },
+      { 
+        "nested": {
+          "path": "transactions",
+          "query": {
+            "range": { "transactions.date": { "gt" : "2014-04-18", "lt" : "2014-05-18" } }
+          }
+        }
+      }
+    ]
+  }
+}'
