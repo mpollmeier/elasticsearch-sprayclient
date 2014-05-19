@@ -40,11 +40,11 @@ object ElasticSearchTryout extends App {
             "name" : {"type": "string", "index": "not_analyzed"},
             "age" : {"type": "integer"},
             "properties":{
-              "transactions": {
+              "books": {
                 "type": "nested",
                 "properties": {
-                  "genre": {"type": "string"},
-                  "date": {"type": "date"}
+                  "author": {"type": "string"},
+                  "borrowedOn": {"type": "date"}
                 }
               }
             }
@@ -55,7 +55,7 @@ object ElasticSearchTryout extends App {
   setupIndex()
   println("index setup complete")
 
-  val memberCount = 1 * 1000 * 1000
+  val memberCount = 1 * 1000  * 1000
   val memberCreator = system.actorOf(Props(classOf[MemberCreator], pipeline)
     .withRouter(RoundRobinRouter(nrOfInstances = 5)))
 
@@ -91,22 +91,22 @@ class MemberCreator(pipeline: Future[SendReceive]) extends Actor {
 
   def createMember(id: Int): Future[HttpResponse] = {
     val age = 12 + rand.nextInt(50)
-    val transactionCount = rand.nextInt(averageTxCountPerMember * 2)
-    val transactions = (0 until transactionCount) map createTransaction
+    val bookCount = rand.nextInt(averageTxCountPerMember * 2)
+    val books = (0 until bookCount) map createBook
     val request = Put(s"/members/member/$id", s"""
       { 
         "name": "Member $id", 
         "age": $age,
-        "transactions": [ ${transactions.mkString(",")} ]
+        "books": [ ${books.mkString(",")} ]
       } 
     """)
     pipeline flatMap (_(request))
   }
 
   val dateFormat = new SimpleDateFormat("yyyy-MM-dd")
-  def createTransaction(id: Int) = {
-    val genres = List("action", "horror", "fiction")
-    def randomGenre(): String = genres(rand.nextInt(genres.size))
+  def createBook(id: Int) = {
+    val authors = List("ranicki", "klein", "lessing")
+    def randomAuthor(): String = authors(rand.nextInt(authors.size))
     def randomDate(): String = {
       val cal = Calendar.getInstance()
       cal.set(Calendar.YEAR, 2014)
@@ -115,9 +115,9 @@ class MemberCreator(pipeline: Future[SendReceive]) extends Actor {
       dateFormat.format(cal.getTime)
     }
 
-    val genre = randomGenre()
+    val author = randomAuthor()
     val date = randomDate()
-    s"""{ "id": $id, "genre": "$genre", "date": "$date"}"""
+    s"""{ "id": $id, "author": "$author", "borrowedOn": "$date"}"""
   }
 
   def verifyResponseStatus(response: HttpResponse) = 
